@@ -22,7 +22,7 @@ extern "C" {
 typedef unsigned int uint;
 #endif
 // The ffsgen build can't include `ffs.h` which also defines this.
-// File IDs must be *less* than this value.  Do NOT change on a whim;
+// File IDs must be less than or equal to this value. Do NOT change on a whim;
 // ffs is currently dimensioned to use an 8-bit value internally.
 #define FFS_MAX_VALID_FILE_ID           254 // 8-bit file_id value
 #endif

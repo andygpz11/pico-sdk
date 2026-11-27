@@ -1,0 +1,14 @@
+# Host-only harness with its own CMake project (see README.md); not built by Bazel.
+filegroup(
+    name = "unsupported_tests",
+    srcs = [
+        "flash_sim.c",
+        "flash_sim.h",
+        "harness.c",
+        "stubs/hardware/flash.h",
+        "stubs/pico.h",
+        "stubs/pico/bootrom.h",
+        "stubs/pico/flash.h",
+        "stubs/pico/stdlib.h",
+    ],
+)

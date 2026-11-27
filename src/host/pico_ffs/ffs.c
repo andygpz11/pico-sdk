@@ -27,12 +27,16 @@ int ffs_write(uint file_id, const char *wrdata, uint data_len) {
     FILE *fp;
     char filename[32];
 
+    if (wrdata == NULL) {
+        return PICO_ERROR_INVALID_ARG;
+    }
+
     if (file_id > FFS_MAX_VALID_FILE_ID) {
-        return PICO_ERROR_GENERIC;
+        return PICO_ERROR_INVALID_ARG;
     }
 
     if (data_len > FFS_API_MAX_WRITE_LENGTH) {
-        return PICO_ERROR_GENERIC;
+        return PICO_ERROR_INVALID_ARG;
     }
 
     ffs_get_filename(file_id, filename, sizeof(filename));
@@ -57,8 +61,15 @@ int ffs_read(uint file_id, const char **filedata) {
     long file_size;
     size_t bytes_read;
 
+    if (filedata == NULL) {
+        return PICO_ERROR_INVALID_ARG;
+    }
+
+    // As on the device: a caller ignoring an error never uses a stale pointer
+    *filedata = NULL;
+
     if (file_id > FFS_MAX_VALID_FILE_ID) {
-        return PICO_ERROR_GENERIC;
+        return PICO_ERROR_INVALID_ARG;
     }
 
     ffs_get_filename(file_id, filename, sizeof(filename));
@@ -92,7 +103,7 @@ int ffs_delete(uint file_id) {
     char filename[32];
 
     if (file_id > FFS_MAX_VALID_FILE_ID) {
-        return PICO_ERROR_GENERIC;
+        return PICO_ERROR_INVALID_ARG;
     }
 
     ffs_get_filename(file_id, filename, sizeof(filename));

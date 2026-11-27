@@ -39,7 +39,7 @@ uint32_t file_hdr_calc_crc0(ffs_file_hdr_t *pfile_hdr, const char *data, uint da
     // crc the header as far as the `status` field
     uint32_t crc0 = crc32_block_of_bytes(CRC32_INIT, pfile_hdr, crc0_hdr_len);
 
-    if (NULL == data || 0 == data_len) {
+    if (data == NULL || data_len == 0) {
         return crc0;
     }
 

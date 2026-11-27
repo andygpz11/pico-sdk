@@ -53,12 +53,18 @@ typedef struct {
 /*! \brief Perform 'femto filing system' start of day initialisation
  *  \ingroup pico_ffs
  *
- * Initializes ffs module variables.
+ * Initialises ffs module variables.
  * RP2350: Reads ffs partition location in flash, RP2040 uses hard coded dimensions.
  * Scans ffs flash area to establish start and end of any file records in flash.
- * Will complete interrupted file writes and interrupted coalescing operations.
+ * Repairs what an interrupted write, delete or chunk swap left; with nothing to repair, it
+ * programs and erases nothing. If it fails, ffs stays uninitialised and every other call
+ * returns PICO_ERROR_INVALID_STATE (after any argument checks).
  *
- * \return PICO_OK on success or PICO_ERROR_xxx
+ * \return PICO_OK on success, or:
+ *         PICO_ERROR_INVALID_DATA if the flash contents are inconsistent and cannot be recovered;
+ *         the error from flash_safe_execute() if a flash operation failed;
+ *         PICO_ERROR_IO if a program or erase did not read back correctly, even when retried;
+ *         or another PICO_ERROR_xxx code, e.g. for a bad ffs area definition.
  */
 int ffs_initialise(void);
 
@@ -66,16 +72,26 @@ int ffs_initialise(void);
 /*! \brief Writes a file to flash.
  *  \ingroup pico_ffs
  *
- * Note: The data length is checked against both the maximum size the ffs's
- * internal data type can accommodate and also the (remaining) available
- * free flash memory size.
- * To ensure integrity, any previous version of the same file will be
- * nullified after successful completion of the new write operation.
+ * Note: The data length is checked against the maximum size the ffs's internal
+ * data type can accommodate, and all files including the new one must fit in one
+ * ffs chunk. When the current chunk is full, the files are moved to the other chunk.
+ * To ensure integrity, any previous version of the same file is deprecated once
+ * the new data has been programmed and read back, just before it is made valid.
+ *
+ * If the write fails after starting to program flash, the file holds either its
+ * previous or its new contents, and the next ffs call first recovers the ffs state
+ * from flash.
  *
  * \param file_id  The file ID to write. This must be <= FFS_MAX_VALID_FILE_ID
- * \param wrdata   Pointer to char data to be written to flash
- * \param data_len Length of data to be written.
- * \return         PICO_OK on success or PICO_ERROR_xxx
+ * \param wrdata   Pointer to char data to be written to flash (not NULL, even for 0 bytes)
+ * \param data_len Length of data to be written, at most FFS_API_MAX_WRITE_LENGTH
+ * \return         PICO_OK on success, or:
+ *                 PICO_ERROR_INVALID_STATE if ffs is not initialised;
+ *                 PICO_ERROR_INVALID_ARG for a bad argument;
+ *                 PICO_ERROR_INSUFFICIENT_RESOURCES if the files would not fit in one chunk;
+ *                 the error from flash_safe_execute() if a flash operation failed;
+ *                 PICO_ERROR_IO if a program did not read back correctly, even when retried;
+ *                 or an error from the recovery that the call ran first
  */
 int ffs_write(uint file_id, const char *wrdata, uint data_len);
 
@@ -86,8 +102,11 @@ int ffs_write(uint file_id, const char *wrdata, uint data_len);
  * If the requested file is found in flash, the supplied pointer will be set
  * to the start address of the specified file's data.  The data length, which
  * can be 0, is the return value.  The caller can de-reference the pointer
- * to read the data, up-to the returned length.  If the file is *not* found,
- * the pointer will not be set and a suitable PICO_ERROR_xxx code returned.
+ * to read the data, up-to the returned length.  If the file is *not* found, or on any
+ * other error, the pointer is set to NULL and a suitable PICO_ERROR_xxx code returned.
+ * After a failed write or delete, this call first recovers the ffs state from flash,
+ * which may program and erase flash and return that recovery's error. A pointer
+ * returned earlier stays valid only until the next ffs call that writes, deletes or recovers.
  *
  * \param file_id  The file ID to read. This must be <= FFS_MAX_VALID_FILE_ID
  * \param filedata  A pointer to a pointer to hold the file's data start address.
@@ -100,14 +119,24 @@ int ffs_read(uint file_id, const char **filedata);
 /*! \brief Deletes a file, specified by its file ID.
  *  \ingroup pico_ffs
  *
+ * Every valid and nascent record of the file is deprecated, so that an interrupted
+ * earlier write cannot bring it back.
+ *
  * \param file_id  The file ID to delete. This must be <= FFS_MAX_VALID_FILE_ID
- * \return PICO_OK on success or PICO_ERROR_xxx
+ * \return PICO_OK on success, PICO_ERROR_NOT_FOUND if there was no such file,
+ *         PICO_ERROR_INVALID_STATE or PICO_ERROR_INVALID_ARG,
+ *         the error from flash_safe_execute() if a flash operation failed,
+ *         PICO_ERROR_IO if a status did not read back correctly, even when retried,
+ *         or an error from the recovery that the call ran first
  */
 int ffs_delete(uint file_id);
 
 
 /*! \brief Returns a list of file_info structures up to the maximum number specified.
  *  \ingroup pico_ffs
+ *
+ * Lists the valid files, stopping silently at max_infos. After a failed write or
+ * delete, this call first recovers the ffs state from flash, and may return its error.
  *
  * \param file_info Pointer to array of file_info_t data to receive the result
  * \param max_infos Maximum number of file_info_t that can be returned
